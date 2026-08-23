@@ -174,6 +174,87 @@
       font-size: 1rem;
     }
     .empty-state a { color: var(--accent2); }
+
+    /* ── Calendar ── */
+    .cal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 20px;
+      margin-bottom: 28px;
+    }
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .cal-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .cal-nav {
+      background: var(--border);
+      border: none;
+      color: var(--text);
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cal-nav:hover { background: var(--accent); }
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-day-name {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 4px 0 8px;
+      text-transform: uppercase;
+    }
+    .cal-cell {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: default;
+      border: 1.5px solid transparent;
+      transition: border-color .15s;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .cal-cell.empty  { background: transparent; cursor: default; }
+    .cal-cell.future { color: #3a3d50; background: transparent; }
+    .cal-cell.recorded {
+      background: #052e16;
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .cal-cell.unrecorded {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--muted);
+    }
+    .cal-cell.unrecorded:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+      background: rgba(99,102,241,.1);
+    }
+    .cal-cell.today-cell {
+      border-color: var(--accent) !important;
+      color: var(--accent2) !important;
+    }
+    .cal-check { font-size: 0.75rem; }
   </style>
 </head>
 <body>
@@ -186,6 +267,16 @@
 <div class="container">
 
 {% if history %}
+
+  <!-- ── Calendar ── -->
+  <div class="cal-card">
+    <div class="cal-header">
+      <button class="cal-nav" id="cal-prev">&#8249;</button>
+      <span class="cal-title" id="cal-month-label"></span>
+      <button class="cal-nav" id="cal-next">&#8250;</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
 
   <!-- ── Stats ── -->
   <div class="stats-row" id="stats-row"></div>
@@ -246,6 +337,70 @@
 <script>
   const history = {{ history | tojson }};
   const questions = {{ questions | tojson }};
+  const recordedDates = new Set({{ recorded_dates | tojson }});
+
+  // ── Calendar ──
+  const today = new Date();
+  let calYear  = today.getFullYear();
+  let calMonth = today.getMonth();
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toYMD(y, m, d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
+
+  function renderCalendar() {
+    const label = new Date(calYear, calMonth, 1)
+      .toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    document.getElementById('cal-month-label').textContent = label;
+
+    const grid = document.getElementById('cal-grid');
+    grid.innerHTML = '';
+
+    // Day headers
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
+      grid.innerHTML += `<div class="cal-day-name">${d}</div>`;
+    });
+
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const todayYMD = toYMD(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Empty leading cells
+    for (let i = 0; i < firstDay; i++) {
+      grid.innerHTML += `<div class="cal-cell empty"></div>`;
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ymd = toYMD(calYear, calMonth, d);
+      const isToday    = ymd === todayYMD;
+      const isFuture   = ymd > todayYMD;
+      const isRecorded = recordedDates.has(ymd);
+
+      if (isFuture) {
+        grid.innerHTML += `<div class="cal-cell future">${d}</div>`;
+      } else if (isRecorded) {
+        grid.innerHTML += `<div class="cal-cell recorded" title="Entry recorded">${d}<span class="cal-check">✓</span></div>`;
+      } else {
+        const cls = isToday ? 'unrecorded today-cell' : 'unrecorded';
+        grid.innerHTML += `<a class="cal-cell ${cls}" href="/?date=${ymd}" title="Log entry for ${ymd}">${d}<span class="cal-check">+</span></a>`;
+      }
+    }
+  }
+
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    // Don’t go beyond the current month
+    const now = new Date();
+    if (calYear < now.getFullYear() || (calYear === now.getFullYear() && calMonth < now.getMonth())) {
+      calMonth++;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    }
+  });
+  renderCalendar();
 
   // ── Compute stats ──
   const scores = history.map(r => parseFloat(r.score_pct) || 0);
