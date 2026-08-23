@@ -173,6 +173,19 @@ def export():
     )
 
 
+@app.route("/api/delete/<entry_date>", methods=["DELETE"])
+def delete_entry(entry_date):
+    try:
+        datetime.strptime(entry_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "Invalid date format"}), 400
+    try:
+        _run(f"DELETE FROM entries WHERE date = {_PH}", [entry_date])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/history")
 def api_history():
     return jsonify(get_history())
