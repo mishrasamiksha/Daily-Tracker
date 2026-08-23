@@ -187,6 +187,7 @@
       padding: 16px 14px;
       margin-top: 28px;
       max-width: 500px;
+      position: relative;
     }
     .cal-header {
       display: flex;
@@ -244,6 +245,11 @@
       background: #052e16;
       border-color: var(--green);
       color: var(--green);
+      cursor: pointer;
+    }
+    .cal-cell.recorded:hover {
+      background: #064e23;
+      border-color: #4ade80;
     }
     .cal-cell.unrecorded {
       background: var(--surface);
@@ -260,6 +266,44 @@
       color: var(--accent2) !important;
     }
     .cal-check { font-size: 0.75rem; }
+
+    /* ── Calendar popup ── */
+    .cal-popup {
+      position: absolute;
+      background: #1e2130;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.55);
+      z-index: 200;
+      min-width: 150px;
+    }
+    .cal-popup-date {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: center;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: .04em;
+    }
+    .cal-popup-btn {
+      display: block;
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      margin-top: 5px;
+      text-align: center;
+      border: none;
+      box-sizing: border-box;
+    }
+    .cal-popup-btn.edit-btn  { background: rgba(99,102,241,.2); color: var(--accent2); }
+    .cal-popup-btn.edit-btn:hover  { background: var(--accent); color: #fff; }
+    .cal-popup-btn.delete-btn { background: rgba(239,68,68,.15); color: var(--red); }
+    .cal-popup-btn.delete-btn:hover { background: var(--red); color: #fff; }
 
     .section-header-row {
       display: flex;
@@ -359,6 +403,12 @@
       <button class="cal-nav" id="cal-next">&#8250;</button>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
+    <!-- popup shown on clicking a recorded date -->
+    <div id="cal-popup" class="cal-popup" style="display:none">
+      <div class="cal-popup-date"></div>
+      <a class="cal-popup-btn edit-btn" href="#">✏ Edit</a>
+      <button class="cal-popup-btn delete-btn">🗑 Delete</button>
+    </div>
   </div>
 
 {% else %}
@@ -414,7 +464,7 @@
       if (isFuture) {
         grid.innerHTML += `<div class="cal-cell future">${d}</div>`;
       } else if (isRecorded) {
-        grid.innerHTML += `<div class="cal-cell recorded" title="Entry recorded">${d}<span class="cal-check">✓</span></div>`;
+        grid.innerHTML += `<div class="cal-cell recorded" onclick="showCalPopup(event,'${ymd}')" title="Click to edit or delete">${d}<span class="cal-check">✓</span></div>`;
       } else {
         const cls = isToday ? 'unrecorded today-cell' : 'unrecorded';
         grid.innerHTML += `<a class="cal-cell ${cls}" href="/?date=${ymd}" title="Log entry for ${ymd}">${d}<span class="cal-check">+</span></a>`;
@@ -437,6 +487,46 @@
     }
   });
   renderCalendar();
+
+  // ── Calendar popup ──
+  function showCalPopup(event, dateStr) {
+    event.stopPropagation();
+    const popup = document.getElementById('cal-popup');
+    popup.querySelector('.cal-popup-date').textContent = dateStr;
+    popup.querySelector('.edit-btn').href = `/?date=${dateStr}`;
+
+    const deleteBtn = popup.querySelector('.delete-btn');
+    deleteBtn.onclick = function(e) {
+      e.stopPropagation();
+      popup.style.display = 'none';
+      if (!confirm(`Delete the entry for ${dateStr}?\nThis cannot be undone.`)) return;
+      fetch(`/api/delete/${dateStr}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) window.location.reload();
+          else alert('Delete failed: ' + (data.error || 'unknown error'));
+        })
+        .catch(() => alert('Delete failed. Please try again.'));
+    };
+
+    const cell = event.currentTarget;
+    const calCard = document.querySelector('.cal-card');
+    const cellRect = cell.getBoundingClientRect();
+    const calRect  = calCard.getBoundingClientRect();
+
+    popup.style.display = 'block';
+    let top  = cellRect.bottom - calRect.top + 4;
+    let left = cellRect.left  - calRect.left;
+    const pw = popup.offsetWidth;
+    if (left + pw > calRect.width) left = calRect.width - pw - 4;
+    popup.style.top  = top + 'px';
+    popup.style.left = Math.max(0, left) + 'px';
+  }
+
+  document.addEventListener('click', () => {
+    const p = document.getElementById('cal-popup');
+    if (p) p.style.display = 'none';
+  });
 
   // ── Render history table ──
   function renderTable(history) {
