@@ -265,7 +265,7 @@
     {% set msg = "Amazing! Keep it up!" if result.pct >= 75 else ("Good effort, push a little more!" if result.pct >= 50 else "Needs improvement. You've got this!") %}
     <div class="score-banner {{ cls }}">
       <div class="score-pct">{{ result.pct }}%</div>
-      <div class="score-sub">{{ result.score }} / {{ result.total }} goals met today</div>
+      <div class="score-sub">{{ result.score }} / {{ result.total }} goals met on {{ entry_date }}</div>
       <div class="score-msg">{{ msg }}</div>
     </div>
 
@@ -294,8 +294,14 @@
 
   {% else %}
     <!-- ── Check-in Form ── -->
-    <p class="section-title">Today's Check-in &mdash; answer all 12 questions</p>
+    {% if not is_today %}
+    <div style="background:#1e1a0e;border:1px solid var(--yellow);border-radius:10px;padding:12px 18px;margin-bottom:20px;font-size:0.9rem;color:var(--yellow);">
+      🗓️ Logging entry for <strong>{{ entry_date }}</strong> &nbsp;&mdash;&nbsp; <a href="/" style="color:var(--muted);font-size:0.85rem;">Switch to today</a>
+    </div>
+    {% endif %}
+    <p class="section-title">{% if is_today %}Today's Check-in{% else %}Check-in for {{ entry_date }}{% endif %} &mdash; answer all 12 questions</p>
     <form method="POST" id="checkin-form">
+      <input type="hidden" name="entry_date" value="{{ entry_date }}">
       <div class="grid">
         {% set groups = [('🌅 Morning', questions[0:4]), ('☀️ Daytime', questions[4:10]), ('🌙 Evening / Night', questions[10:12])] %}
         {% for group_label, group_qs in groups %}
