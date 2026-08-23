@@ -5,9 +5,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
-      - key: DATA_DIR
-        value: /data
-    disk:
-      name: tracker-data
-      mountPath: /data
-      sizeGB: 1
+      # Paste your PostgreSQL connection string here (Supabase / Neon / Render Postgres).
+      # The app falls back to a local SQLite file when this is not set.
+      - key: DATABASE_URL
+        sync: false
