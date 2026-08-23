@@ -14,6 +14,12 @@ DB_FILE = os.path.join(_DATA_DIR, "tracker.db")
 # SQL placeholder: %s for PostgreSQL, ? for SQLite
 _PH = "%s" if DATABASE_URL else "?"
 
+import logging
+if DATABASE_URL:
+    logging.warning("DB mode: PostgreSQL (data will persist across deploys)")
+else:
+    logging.warning("DB mode: SQLite — set DATABASE_URL to persist data on Render!")
+
 QUESTIONS = [
     # Morning
     {"id": "sleep",     "label": "Slept 6-8 Hours",          "expected": "yes"},
