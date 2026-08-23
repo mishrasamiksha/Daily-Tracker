@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard – Daily Goals Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d27;
+      --border:  #2a2d3e;
+      --text:    #e2e8f0;
+      --muted:   #8892a4;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --yellow:  #f59e0b;
+      --accent:  #6366f1;
+      --accent2: #818cf8;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent2), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .btn-link {
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: opacity .2s;
+    }
+    .btn-link:hover { opacity: .85; }
+
+    .container { max-width: 1060px; margin: 0 auto; padding: 32px 20px; }
+
+    /* ── Stat cards row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 18px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent2);
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── Charts row ── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 18px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 720px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 20px;
+    }
+    .chart-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── History table ── */
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    thead th {
+      background: #212435;
+      padding: 12px 14px;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    tbody tr { border-top: 1px solid var(--border); }
+    tbody tr:hover { background: rgba(255,255,255,.03); }
+    tbody td {
+      padding: 11px 14px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .score-cell {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .score-cell.great { color: var(--green); }
+    .score-cell.ok    { color: var(--yellow); }
+    .score-cell.poor  { color: var(--red); }
+
+    .dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .dot.pass { background: var(--green); }
+    .dot.fail { background: var(--red); }
+
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      padding: 60px 20px;
+      font-size: 1rem;
+    }
+    .empty-state a { color: var(--accent2); }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <h1>&#9733; Dashboard</h1>
+  <a class="btn-link" href="/">&#43; Today's Check-in</a>
+</header>
+
+<div class="container">
+
+{% if history %}
+
+  <!-- ── Stats ── -->
+  <div class="stats-row" id="stats-row"></div>
+
+  <!-- ── Charts ── -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Daily Score Trend (%)</div>
+      <canvas id="trendChart" height="140"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Habit Success Rate</div>
+      <canvas id="habitChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── History Table ── -->
+  <p class="section-title">Entry History (latest first)</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          {% for q in questions %}
+          <th>{{ q.label }}</th>
+          {% endfor %}
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in history | reverse %}
+        <tr>
+          <td>{{ row.Date }}</td>
+          {% for q in questions %}
+          {% set val = row.get(q.id, '') %}
+          {% set passed = (val == q.expected) %}
+          <td><span class="dot {{ 'pass' if passed else 'fail' }}" title="{{ val }}"></span></td>
+          {% endfor %}
+          {% set pct = row.get('score_pct', 0) | float %}
+          <td class="score-cell {{ 'great' if pct >= 75 else ('ok' if pct >= 50 else 'poor') }}">
+            {{ "%.1f"|format(pct) }}%
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% else %}
+  <div class="empty-state">
+    <p>No data yet. <a href="/">Complete your first check-in!</a></p>
+  </div>
+{% endif %}
+
+</div>
+
+{% if history %}
+<script>
+  const history = {{ history | tojson }};
+  const questions = {{ questions | tojson }};
+
+  // ── Compute stats ──
+  const scores = history.map(r => parseFloat(r.score_pct) || 0);
+  const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
+  const best = Math.max(...scores);
+  const streak = (() => {
+    let s = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if ((parseFloat(history[i].score_pct) || 0) >= 75) s++; else break;
+    }
+    return s;
+  })();
+  const statsRow = document.getElementById("stats-row");
+  [
+    { v: history.length, l: "Days Tracked" },
+    { v: avg.toFixed(1) + "%", l: "Average Score" },
+    { v: best.toFixed(1) + "%", l: "Best Score" },
+    { v: streak + (streak === 1 ? " day" : " days"), l: "Current Streak (≥75%)" },
+  ].forEach(({ v, l }) => {
+    statsRow.innerHTML += `<div class="stat-card"><div class="stat-value">${v}</div><div class="stat-label">${l}</div></div>`;
+  });
+
+  // ── Trend chart ──
+  const labels = history.map(r => r.Date);
+  new Chart(document.getElementById("trendChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "Score %",
+        data: scores,
+        borderColor: "#6366f1",
+        backgroundColor: "rgba(99,102,241,.12)",
+        borderWidth: 2,
+        pointBackgroundColor: scores.map(s => s >= 75 ? "#22c55e" : s >= 50 ? "#f59e0b" : "#ef4444"),
+        pointRadius: 5,
+        fill: true,
+        tension: 0.35,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8892a4", maxTicksLimit: 10 }, grid: { color: "#2a2d3e" } },
+        y: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 }
+      }
+    }
+  });
+
+  // ── Habit success rate chart ──
+  const habitRates = questions.map(q => {
+    const met = history.filter(r => r[q.id] === q.expected).length;
+    return Math.round((met / history.length) * 100);
+  });
+  new Chart(document.getElementById("habitChart"), {
+    type: "bar",
+    data: {
+      labels: questions.map(q => q.label),
+      datasets: [{
+        data: habitRates,
+        backgroundColor: habitRates.map(r => r >= 75 ? "rgba(34,197,94,.7)" : r >= 50 ? "rgba(245,158,11,.7)" : "rgba(239,68,68,.7)"),
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 },
+        y: { ticks: { color: "#8892a4", font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+</script>
+{% endif %}
+
+</body>
+</html>
