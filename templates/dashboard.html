@@ -460,9 +460,12 @@
       const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
       const best = Math.max(...scores);
       const streak = (() => {
+        const todayYMD = toYMD(today.getFullYear(), today.getMonth(), today.getDate());
         let s = 0;
         for (let i = history.length - 1; i >= 0; i--) {
-          if ((parseFloat(history[i].score_pct) || 0) >= 75) s++; else break;
+          const score = parseFloat(history[i].score_pct) || 0;
+          if (history[i].date === todayYMD && score < 75) continue; // skip incomplete today
+          if (score >= 75) s++; else break;
         }
         return s;
       })();
