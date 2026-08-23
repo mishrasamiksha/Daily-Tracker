@@ -307,17 +307,19 @@
         {% for group_label, group_qs in groups %}
           <div class="group-header"><span>{{ group_label }}</span></div>
           {% for q in group_qs %}
-          <div class="card" id="card-{{ q.id }}">
+          <div class="card {% if existing.get(q.id) == q.expected %}pass{% elif existing.get(q.id) %}fail{% endif %}" id="card-{{ q.id }}">
             <div class="card-label">{{ q.label }}</div>
             <div class="radio-group">
               <label>
                 <input type="radio" name="{{ q.id }}" value="yes" required
-                       onchange="highlightCard('{{ q.id }}')">
+                       {% if existing.get(q.id) == 'yes' %}checked{% endif %}
+                       onchange="highlightCard('{{ q.id }}', this.value, '{{ q.expected }}')">
                 <span class="radio-btn">Yes</span>
               </label>
               <label>
                 <input type="radio" name="{{ q.id }}" value="no"
-                       onchange="highlightCard('{{ q.id }}')">
+                       {% if existing.get(q.id) == 'no' %}checked{% endif %}
+                       onchange="highlightCard('{{ q.id }}', this.value, '{{ q.expected }}')">
                 <span class="radio-btn">No</span>
               </label>
             </div>
@@ -337,9 +339,10 @@
   document.getElementById("today-date").textContent =
     new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
 
-  function highlightCard(id) {
+  function highlightCard(id, value, expected) {
     const card = document.getElementById("card-" + id);
-    card.style.borderColor = "var(--accent)";
+    card.classList.remove('pass', 'fail');
+    card.classList.add(value === expected ? 'pass' : 'fail');
   }
 </script>
 </body>
