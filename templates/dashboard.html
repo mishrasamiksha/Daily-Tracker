@@ -126,7 +126,8 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
-      overflow: hidden;
+      overflow: auto;
+      max-height: 420px;
     }
     table {
       width: 100%;
@@ -143,6 +144,9 @@
       letter-spacing: .07em;
       color: var(--muted);
       white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     tbody tr { border-top: 1px solid var(--border); }
     tbody tr:hover { background: rgba(255,255,255,.03); }
@@ -180,14 +184,15 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 22px 20px;
-      margin-bottom: 28px;
+      padding: 16px 14px;
+      margin-top: 28px;
+      max-width: 500px;
     }
     .cal-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
     }
     .cal-title {
       font-size: 1rem;
@@ -208,7 +213,7 @@
     .cal-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
+      gap: 3px;
     }
     .cal-day-name {
       text-align: center;
@@ -220,12 +225,12 @@
     }
     .cal-cell {
       aspect-ratio: 1;
-      border-radius: 8px;
+      border-radius: 6px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 0.82rem;
+      font-size: 0.7rem;
       font-weight: 600;
       cursor: default;
       border: 1.5px solid transparent;
@@ -255,6 +260,24 @@
       color: var(--accent2) !important;
     }
     .cal-check { font-size: 0.75rem; }
+
+    .section-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .row-limit-label { font-size: 0.78rem; color: var(--muted); margin-right: 8px; }
+    .row-limit-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .row-limit-select:focus { outline: none; border-color: var(--accent); }
   </style>
 </head>
 <body>
@@ -267,16 +290,6 @@
 <div class="container">
 
 {% if history %}
-
-  <!-- ── Calendar ── -->
-  <div class="cal-card">
-    <div class="cal-header">
-      <button class="cal-nav" id="cal-prev">&#8249;</button>
-      <span class="cal-title" id="cal-month-label"></span>
-      <button class="cal-nav" id="cal-next">&#8250;</button>
-    </div>
-    <div class="cal-grid" id="cal-grid"></div>
-  </div>
 
   <!-- ── Stats ── -->
   <div class="stats-row" id="stats-row"></div>
@@ -294,35 +307,43 @@
   </div>
 
   <!-- ── History Table ── -->
-  <p class="section-title">Entry History (latest first)</p>
+  <div class="section-header-row">
+    <p class="section-title" style="margin:0">Entry History (latest first)</p>
+    <div>
+      <label class="row-limit-label">Show:</label>
+      <select id="row-limit" class="row-limit-select">
+        <option value="10">Top 10</option>
+        <option value="20" selected>Top 20</option>
+        <option value="30">Top 30</option>
+        <option value="0">All</option>
+      </select>
+    </div>
+  </div>
   <div class="table-wrap">
-    <table>
+    <table id="history-table">
       <thead>
         <tr>
           <th>Date</th>
+          <th>Score</th>
           {% for q in questions %}
           <th>{{ q.label }}</th>
           {% endfor %}
-          <th>Score</th>
         </tr>
       </thead>
-      <tbody>
-        {% for row in history | reverse %}
-        <tr>
-          <td>{{ row.Date }}</td>
-          {% for q in questions %}
-          {% set val = row.get(q.id, '') %}
-          {% set passed = (val == q.expected) %}
-          <td><span class="dot {{ 'pass' if passed else 'fail' }}" title="{{ val }}"></span></td>
-          {% endfor %}
-          {% set pct = row.get('score_pct', 0) | float %}
-          <td class="score-cell {{ 'great' if pct >= 75 else ('ok' if pct >= 50 else 'poor') }}">
-            {{ "%.1f"|format(pct) }}%
-          </td>
-        </tr>
-        {% endfor %}
+      <tbody id="history-tbody">
+        <tr><td colspan="50" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- ── Calendar ── -->
+  <div class="cal-card">
+    <div class="cal-header">
+      <button class="cal-nav" id="cal-prev">&#8249;</button>
+      <span class="cal-title" id="cal-month-label"></span>
+      <button class="cal-nav" id="cal-next">&#8250;</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
   </div>
 
 {% else %}
@@ -335,9 +356,9 @@
 
 {% if history %}
 <script>
-  const history = {{ history | tojson }};
   const questions = {{ questions | tojson }};
-  const recordedDates = new Set({{ recorded_dates | tojson }});
+  let recordedDates = new Set({{ recorded_dates | tojson }});
+  let latestHistory = [];
 
   // ── Calendar ──
   const today = new Date();
@@ -402,78 +423,110 @@
   });
   renderCalendar();
 
-  // ── Compute stats ──
-  const scores = history.map(r => parseFloat(r.score_pct) || 0);
-  const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
-  const best = Math.max(...scores);
-  const streak = (() => {
-    let s = 0;
-    for (let i = history.length - 1; i >= 0; i--) {
-      if ((parseFloat(history[i].score_pct) || 0) >= 75) s++; else break;
+  // ── Render history table ──
+  function renderTable(history) {
+    const limit = parseInt(document.getElementById('row-limit').value);
+    const rows = limit > 0 ? [...history].reverse().slice(0, limit) : [...history].reverse();
+    const tbody = document.getElementById('history-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="${questions.length + 2}" style="text-align:center;color:var(--muted);padding:20px">No entries yet</td></tr>`;
+      return;
     }
-    return s;
-  })();
-  const statsRow = document.getElementById("stats-row");
-  [
-    { v: history.length, l: "Days Tracked" },
-    { v: avg.toFixed(1) + "%", l: "Average Score" },
-    { v: best.toFixed(1) + "%", l: "Best Score" },
-    { v: streak + (streak === 1 ? " day" : " days"), l: "Current Streak (≥75%)" },
-  ].forEach(({ v, l }) => {
-    statsRow.innerHTML += `<div class="stat-card"><div class="stat-value">${v}</div><div class="stat-label">${l}</div></div>`;
-  });
+    tbody.innerHTML = rows.map(r => {
+      const pct = parseFloat(r.score_pct) || 0;
+      const cls = pct >= 75 ? 'great' : pct >= 50 ? 'ok' : 'poor';
+      const habits = questions.map(q => {
+        const passed = r[q.id] === q.expected;
+        return `<td><span class="dot ${passed ? 'pass' : 'fail'}" title="${r[q.id] || ''}"></span></td>`;
+      }).join('');
+      return `<tr><td>${r.date}</td><td class="score-cell ${cls}">${pct.toFixed(1)}%</td>${habits}</tr>`;
+    }).join('');
+  }
 
-  // ── Trend chart ──
-  const labels = history.map(r => r.Date);
-  new Chart(document.getElementById("trendChart"), {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: "Score %",
-        data: scores,
-        borderColor: "#6366f1",
-        backgroundColor: "rgba(99,102,241,.12)",
-        borderWidth: 2,
-        pointBackgroundColor: scores.map(s => s >= 75 ? "#22c55e" : s >= 50 ? "#f59e0b" : "#ef4444"),
-        pointRadius: 5,
-        fill: true,
-        tension: 0.35,
-      }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: "#8892a4", maxTicksLimit: 10 }, grid: { color: "#2a2d3e" } },
-        y: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 }
-      }
-    }
-  });
+  document.getElementById('row-limit').addEventListener('change', () => renderTable(latestHistory));
 
-  // ── Habit success rate chart ──
-  const habitRates = questions.map(q => {
-    const met = history.filter(r => r[q.id] === q.expected).length;
-    return Math.round((met / history.length) * 100);
-  });
-  new Chart(document.getElementById("habitChart"), {
-    type: "bar",
-    data: {
-      labels: questions.map(q => q.label),
-      datasets: [{
-        data: habitRates,
-        backgroundColor: habitRates.map(r => r >= 75 ? "rgba(34,197,94,.7)" : r >= 50 ? "rgba(245,158,11,.7)" : "rgba(239,68,68,.7)"),
-        borderRadius: 5,
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 },
-        y: { ticks: { color: "#8892a4", font: { size: 11 } }, grid: { display: false } }
-      }
-    }
-  });
+  // ── Fetch fresh history → update stats + charts + calendar ──
+  fetch('/api/history')
+    .then(res => res.json())
+    .then(history => {
+      latestHistory = history;
+      recordedDates = new Set(history.map(r => r.date));
+      renderCalendar();
+      renderTable(history);
+
+      const scores = history.map(r => parseFloat(r.score_pct) || 0);
+      if (!scores.length) return;
+
+      const avg = scores.reduce((a,b) => a+b, 0) / scores.length;
+      const best = Math.max(...scores);
+      const streak = (() => {
+        let s = 0;
+        for (let i = history.length - 1; i >= 0; i--) {
+          if ((parseFloat(history[i].score_pct) || 0) >= 75) s++; else break;
+        }
+        return s;
+      })();
+      const statsRow = document.getElementById("stats-row");
+      statsRow.innerHTML = '';
+      [
+        { v: history.length, l: "Days Tracked" },
+        { v: avg.toFixed(1) + "%", l: "Average Score" },
+        { v: best.toFixed(1) + "%", l: "Best Score" },
+        { v: streak + (streak === 1 ? " day" : " days"), l: "Current Streak (≥75%)" },
+      ].forEach(({ v, l }) => {
+        statsRow.innerHTML += `<div class="stat-card"><div class="stat-value">${v}</div><div class="stat-label">${l}</div></div>`;
+      });
+
+      const labels = history.map(r => r.date);
+      new Chart(document.getElementById("trendChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Score %",
+            data: scores,
+            borderColor: "#6366f1",
+            backgroundColor: "rgba(99,102,241,.12)",
+            borderWidth: 2,
+            pointBackgroundColor: scores.map(s => s >= 75 ? "#22c55e" : s >= 50 ? "#f59e0b" : "#ef4444"),
+            pointRadius: 5,
+            fill: true,
+            tension: 0.35,
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#8892a4", maxTicksLimit: 10 }, grid: { color: "#2a2d3e" } },
+            y: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 }
+          }
+        }
+      });
+
+      const habitRates = questions.map(q => {
+        const met = history.filter(r => r[q.id] === q.expected).length;
+        return Math.round((met / history.length) * 100);
+      });
+      new Chart(document.getElementById("habitChart"), {
+        type: "bar",
+        data: {
+          labels: questions.map(q => q.label),
+          datasets: [{
+            data: habitRates,
+            backgroundColor: habitRates.map(r => r >= 75 ? "rgba(34,197,94,.7)" : r >= 50 ? "rgba(245,158,11,.7)" : "rgba(239,68,68,.7)"),
+            borderRadius: 5,
+          }]
+        },
+        options: {
+          indexAxis: "y",
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#8892a4", callback: v => v + "%" }, grid: { color: "#2a2d3e" }, min: 0, max: 100 },
+            y: { ticks: { color: "#8892a4", font: { size: 11 } }, grid: { display: false } }
+          }
+        }
+      });
+    });
 </script>
 {% endif %}
 
