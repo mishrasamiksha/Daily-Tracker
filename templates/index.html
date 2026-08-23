@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Goals Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3e;
+      --text:     #e2e8f0;
+      --muted:    #8892a4;
+      --green:    #22c55e;
+      --green-bg: #052e16;
+      --red:      #ef4444;
+      --red-bg:   #2d0707;
+      --accent:   #6366f1;
+      --accent2:  #818cf8;
+      --yellow:   #f59e0b;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent2), var(--green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .header-right { display: flex; align-items: center; gap: 20px; }
+    .date-badge {
+      background: var(--border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .btn-link {
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: opacity .2s;
+    }
+    .btn-link:hover { opacity: .85; }
+
+    /* ── Main wrapper ── */
+    .container { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+
+    /* ── Score banner (after submit) ── */
+    .score-banner {
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      text-align: center;
+      border: 1px solid var(--border);
+    }
+    .score-banner.great  { background: #0a2918; border-color: var(--green); }
+    .score-banner.ok     { background: #2a1f06; border-color: var(--yellow); }
+    .score-banner.poor   { background: var(--red-bg); border-color: var(--red); }
+
+    .score-pct {
+      font-size: 4rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .score-banner.great .score-pct  { color: var(--green); }
+    .score-banner.ok    .score-pct  { color: var(--yellow); }
+    .score-banner.poor  .score-pct  { color: var(--red); }
+
+    .score-sub { font-size: 1.05rem; color: var(--muted); margin-bottom: 18px; }
+    .score-msg { font-size: 1rem; font-weight: 600; }
+    .score-banner.great .score-msg { color: var(--green); }
+    .score-banner.ok    .score-msg { color: var(--yellow); }
+    .score-banner.poor  .score-msg { color: var(--red); }
+
+    /* ── Question grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    /* ── Question card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: border-color .2s, background .2s;
+    }
+    .card:hover { border-color: var(--accent); }
+
+    .card.pass {
+      background: var(--green-bg);
+      border-color: var(--green);
+    }
+    .card.fail {
+      background: var(--red-bg);
+      border-color: var(--red);
+    }
+
+    .card-label {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    /* result state */
+    .result-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .answer-badge {
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .card.pass .answer-badge { background: #166534; color: #86efac; }
+    .card.fail .answer-badge { background: #7f1d1d; color: #fca5a5; }
+
+    .icon { font-size: 1.5rem; }
+    .card.pass .icon { color: var(--green); }
+    .card.fail .icon { color: var(--red); }
+
+    /* form state */
+    .radio-group {
+      display: flex;
+      gap: 10px;
+    }
+    .radio-group label {
+      flex: 1;
+      cursor: pointer;
+    }
+    .radio-group input[type="radio"] { display: none; }
+    .radio-btn {
+      display: block;
+      text-align: center;
+      padding: 9px 0;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .radio-group input[type="radio"]:checked + .radio-btn {
+      border-color: var(--accent);
+      background: rgba(99,102,241,.15);
+      color: var(--accent2);
+    }
+    .radio-group label:hover .radio-btn {
+      border-color: var(--accent2);
+      color: var(--accent2);
+    }
+
+    /* ── Submit button ── */
+    .submit-wrap { text-align: center; }
+    .btn-submit {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff;
+      border: none;
+      padding: 14px 48px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-submit:hover { opacity: .9; transform: translateY(-1px); }
+    .btn-submit:active { transform: translateY(0); }
+
+    /* ── Re-check-in link ── */
+    .again-link {
+      display: inline-block;
+      margin-top: 16px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      border-bottom: 1px dashed var(--border);
+    }
+    .again-link:hover { color: var(--text); }
+
+    /* ── Section heading ── */
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Time-of-day group headers ── */
+    .group-header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .group-header span {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--accent2);
+      white-space: nowrap;
+    }
+    .group-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <h1>&#9733; Daily Goals Tracker</h1>
+  <div class="header-right">
+    <span class="date-badge" id="today-date"></span>
+    <a class="btn-link" href="/dashboard">Dashboard &rarr;</a>
+  </div>
+</header>
+
+<div class="container">
+
+  {% if result %}
+    <!-- ── Score Banner ── -->
+    {% set cls = 'great' if result.pct >= 75 else ('ok' if result.pct >= 50 else 'poor') %}
+    {% set msg = "Amazing! Keep it up!" if result.pct >= 75 else ("Good effort, push a little more!" if result.pct >= 50 else "Needs improvement. You've got this!") %}
+    <div class="score-banner {{ cls }}">
+      <div class="score-pct">{{ result.pct }}%</div>
+      <div class="score-sub">{{ result.score }} / {{ result.total }} goals met today</div>
+      <div class="score-msg">{{ msg }}</div>
+    </div>
+
+    <!-- ── Results Grid ── -->
+    <p class="section-title">Today's Results</p>
+    <div class="grid">
+      {% set groups = [('🌅 Morning', [0,1,2,3]), ('☀️ Daytime', [4,5,6,7,8,9]), ('🌙 Evening / Night', [10,11])] %}
+      {% for group_label, indices in groups %}
+        <div class="group-header"><span>{{ group_label }}</span></div>
+        {% for i in indices %}
+        {% set item = result.entries[i] %}
+        <div class="card {{ 'pass' if item.passed else 'fail' }}">
+          <div class="card-label">{{ item.label }}</div>
+          <div class="result-row">
+            <span class="answer-badge">{{ item.answer }}</span>
+            <span class="icon">{{ "✓" if item.passed else "✗" }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+
+    <div class="submit-wrap">
+      <a class="again-link" href="/">&#8592; Re-do today's check-in</a>
+    </div>
+
+  {% else %}
+    <!-- ── Check-in Form ── -->
+    <p class="section-title">Today's Check-in &mdash; answer all 12 questions</p>
+    <form method="POST" id="checkin-form">
+      <div class="grid">
+        {% set groups = [('🌅 Morning', questions[0:4]), ('☀️ Daytime', questions[4:10]), ('🌙 Evening / Night', questions[10:12])] %}
+        {% for group_label, group_qs in groups %}
+          <div class="group-header"><span>{{ group_label }}</span></div>
+          {% for q in group_qs %}
+          <div class="card" id="card-{{ q.id }}">
+            <div class="card-label">{{ q.label }}</div>
+            <div class="radio-group">
+              <label>
+                <input type="radio" name="{{ q.id }}" value="yes" required
+                       onchange="highlightCard('{{ q.id }}')">
+                <span class="radio-btn">Yes</span>
+              </label>
+              <label>
+                <input type="radio" name="{{ q.id }}" value="no"
+                       onchange="highlightCard('{{ q.id }}')">
+                <span class="radio-btn">No</span>
+              </label>
+            </div>
+          </div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+      <div class="submit-wrap">
+        <button class="btn-submit" type="submit">Submit Today's Check-in</button>
+      </div>
+    </form>
+  {% endif %}
+
+</div>
+
+<script>
+  document.getElementById("today-date").textContent =
+    new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+  function highlightCard(id) {
+    const card = document.getElementById("card-" + id);
+    card.style.borderColor = "var(--accent)";
+  }
+</script>
+</body>
+</html>
