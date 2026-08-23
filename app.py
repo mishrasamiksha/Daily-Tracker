@@ -143,8 +143,18 @@ def index():
         save_entry(answers, score_pct, entry_date_str)
         result = {"entries": items, "score": score, "total": len(QUESTIONS), "pct": score_pct}
 
+    # Pre-fill the form with any existing saved answers for this date
+    existing = {}
+    if result is None:
+        try:
+            rows = _run(f"SELECT * FROM entries WHERE date = {_PH}", [entry_date_str], fetch=True)
+            if rows:
+                existing = rows[0]
+        except Exception:
+            pass
+
     return render_template("index.html", questions=QUESTIONS, result=result,
-                           entry_date=entry_date_str, is_today=is_today)
+                           entry_date=entry_date_str, is_today=is_today, existing=existing)
 
 
 @app.route("/dashboard")
