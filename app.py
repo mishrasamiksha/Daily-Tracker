@@ -1,16 +1,18 @@
 from flask import Flask, render_template, request, jsonify, send_file
-import sqlite3
-import pandas as pd
-from datetime import date, datetime
 import os
 import io
+import pandas as pd
+from datetime import date, datetime
 
 app = Flask(__name__)
 
-# On Render, use /data/tracker.db (persistent disk mount point) if available,
-# otherwise fall back to the local directory (for development).
+# PostgreSQL (production) or SQLite (local dev)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 _DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(__file__))
 DB_FILE = os.path.join(_DATA_DIR, "tracker.db")
+
+# SQL placeholder: %s for PostgreSQL, ? for SQLite
+_PH = "%s" if DATABASE_URL else "?"
 
 QUESTIONS = [
     # Morning
@@ -35,22 +37,45 @@ QUESTIONS = [
 # Database helpers
 # ---------------------------------------------------------------------------
 
-def get_db():
+def _get_conn():
+    """Return a DB connection for the active backend."""
+    if DATABASE_URL:
+        import psycopg2
+        import psycopg2.extras
+        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
+    import sqlite3
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+def _run(sql, params=None, fetch=False):
+    """Execute SQL on the active backend; return list of dicts when fetch=True."""
+    conn = _get_conn()
+    try:
+        if DATABASE_URL:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(sql, params or [])
+                return [dict(r) for r in cur.fetchall()] if fetch else []
+        else:
+            with conn:
+                cur = conn.execute(sql, params or [])
+                return [dict(r) for r in cur.fetchall()] if fetch else []
+    finally:
+        conn.close()
+
+
 def init_db():
     cols = ", ".join(f'"{q["id"]}" TEXT' for q in QUESTIONS)
-    with get_db() as conn:
-        conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS entries (
-                date TEXT PRIMARY KEY,
-                {cols},
-                score_pct REAL
-            )
-        """)
+    _run(f"""
+        CREATE TABLE IF NOT EXISTS entries (
+            date TEXT PRIMARY KEY,
+            {cols},
+            score_pct REAL
+        )
+    """)
 
 
 def save_entry(answers: dict, score_pct: float, for_date: str = None):
@@ -59,21 +84,18 @@ def save_entry(answers: dict, score_pct: float, for_date: str = None):
     cols    = ["date"] + q_ids + ["score_pct"]
     vals    = [entry_date] + [answers.get(qid, "") for qid in q_ids] + [score_pct]
     col_str = ", ".join(f'"{c}"' for c in cols)
-    placeholders = ", ".join("?" * len(cols))
+    placeholders = ", ".join([_PH] * len(cols))
     update_str   = ", ".join(f'"{c}"=excluded."{c}"' for c in cols[1:])
-    with get_db() as conn:
-        conn.execute(
-            f'INSERT INTO entries ({col_str}) VALUES ({placeholders}) '
-            f'ON CONFLICT(date) DO UPDATE SET {update_str}',
-            vals,
-        )
+    _run(
+        f'INSERT INTO entries ({col_str}) VALUES ({placeholders}) '
+        f'ON CONFLICT(date) DO UPDATE SET {update_str}',
+        vals,
+    )
 
 
 def get_history():
     try:
-        with get_db() as conn:
-            rows = conn.execute("SELECT * FROM entries ORDER BY date ASC").fetchall()
-            return [dict(r) for r in rows]
+        return _run("SELECT * FROM entries ORDER BY date ASC", fetch=True)
     except Exception:
         return []
 
