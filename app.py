@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_file
 import sqlite3
 import pandas as pd
-from datetime import date
+from datetime import date, datetime
 import os
 import io
 
@@ -53,10 +53,11 @@ def init_db():
         """)
 
 
-def save_entry(answers: dict, score_pct: float):
+def save_entry(answers: dict, score_pct: float, for_date: str = None):
+    entry_date = for_date or str(date.today())
     q_ids   = [q["id"] for q in QUESTIONS]
     cols    = ["date"] + q_ids + ["score_pct"]
-    vals    = [str(date.today())] + [answers.get(qid, "") for qid in q_ids] + [score_pct]
+    vals    = [entry_date] + [answers.get(qid, "") for qid in q_ids] + [score_pct]
     col_str = ", ".join(f'"{c}"' for c in cols)
     placeholders = ", ".join("?" * len(cols))
     update_str   = ", ".join(f'"{c}"=excluded."{c}"' for c in cols[1:])
@@ -83,6 +84,18 @@ def get_history():
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    # Resolve entry date — from query param (?date=YYYY-MM-DD) or form field
+    raw = request.args.get("date") or request.form.get("entry_date", "")
+    try:
+        entry_date = datetime.strptime(raw, "%Y-%m-%d").date()
+        if entry_date > date.today():   # block future dates
+            entry_date = date.today()
+    except (ValueError, TypeError):
+        entry_date = date.today()
+
+    entry_date_str = str(entry_date)
+    is_today = (entry_date == date.today())
+
     result = None
     if request.method == "POST":
         answers = {q["id"]: request.form.get(q["id"], "no") for q in QUESTIONS}
@@ -99,16 +112,19 @@ def index():
                 "passed":   passed,
             })
         score_pct = round((score / len(QUESTIONS)) * 100, 2)
-        save_entry(answers, score_pct)
+        save_entry(answers, score_pct, entry_date_str)
         result = {"entries": items, "score": score, "total": len(QUESTIONS), "pct": score_pct}
 
-    return render_template("index.html", questions=QUESTIONS, result=result)
+    return render_template("index.html", questions=QUESTIONS, result=result,
+                           entry_date=entry_date_str, is_today=is_today)
 
 
 @app.route("/dashboard")
 def dashboard():
     history = get_history()
-    return render_template("dashboard.html", history=history, questions=QUESTIONS)
+    recorded_dates = [row["date"] for row in history]
+    return render_template("dashboard.html", history=history, questions=QUESTIONS,
+                           recorded_dates=recorded_dates)
 
 
 @app.route("/export")
