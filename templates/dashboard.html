@@ -278,6 +278,20 @@
       cursor: pointer;
     }
     .row-limit-select:focus { outline: none; border-color: var(--accent); }
+
+    .btn-delete {
+      background: none;
+      border: 1px solid var(--red);
+      color: var(--red);
+      border-radius: 5px;
+      padding: 2px 7px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      transition: background .15s, color .15s;
+    }
+    .btn-delete:hover { background: var(--red); color: #fff; }
+    .btn-delete:disabled { opacity: .4; cursor: default; }
   </style>
 </head>
 <body>
@@ -328,6 +342,7 @@
           {% for q in questions %}
           <th>{{ q.label }}</th>
           {% endfor %}
+          <th></th>
         </tr>
       </thead>
       <tbody id="history-tbody">
@@ -439,8 +454,21 @@
         const passed = r[q.id] === q.expected;
         return `<td><span class="dot ${passed ? 'pass' : 'fail'}" title="${r[q.id] || ''}"></span></td>`;
       }).join('');
-      return `<tr><td>${r.date}</td><td class="score-cell ${cls}">${pct.toFixed(1)}%</td>${habits}</tr>`;
+      return `<tr><td>${r.date}</td><td class="score-cell ${cls}">${pct.toFixed(1)}%</td>${habits}<td><button class="btn-delete" onclick="deleteEntry('${r.date}',this)" title="Delete entry for ${r.date}">🗑</button></td></tr>`;
     }).join('');
+  }
+
+  function deleteEntry(dateStr, btn) {
+    if (!confirm(`Delete the entry for ${dateStr}?\nThis cannot be undone.`)) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    fetch(`/api/delete/${dateStr}`, { method: 'DELETE' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) { window.location.reload(); }
+        else { alert('Delete failed: ' + (data.error || 'unknown error')); btn.disabled = false; btn.textContent = '🗑'; }
+      })
+      .catch(() => { alert('Delete failed. Please try again.'); btn.disabled = false; btn.textContent = '🗑'; });
   }
 
   document.getElementById('row-limit').addEventListener('change', () => renderTable(latestHistory));
