@@ -134,6 +134,8 @@ def api_history():
     return jsonify(get_history())
 
 
+# Run at import time so gunicorn also initialises the DB
+init_db()
+
 if __name__ == "__main__":
-    init_db()
     app.run(debug=True, port=5000)
