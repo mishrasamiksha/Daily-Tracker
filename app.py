@@ -38,6 +38,16 @@ QUESTIONS = [
     {"id": "study",     "label": "Study",                    "expected": "yes"},
 ]
 
+STREAK_HABITS = [
+    {"id": "sleep",   "emoji": "😴", "label": "Sleeping"},
+    {"id": "sugar",   "emoji": "🚫", "label": "No Sugar"},
+    {"id": "protein", "emoji": "🥩", "label": "Protein"},
+    {"id": "junk",    "emoji": "🥗", "label": "No Junk"},
+    {"id": "study",   "emoji": "📚", "label": "Study"},
+    {"id": "water",   "emoji": "💧", "label": "Water"},
+    {"id": "workout", "emoji": "🏋️", "label": "Workout"},
+]
+
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -106,6 +116,36 @@ def get_history():
         return []
 
 
+def get_streaks():
+    """Return current consecutive-day streak count for each STREAK_HABITS entry."""
+    history = get_history()
+    expected = {q["id"]: q["expected"] for q in QUESTIONS}
+    result = {h["id"]: 0 for h in STREAK_HABITS}
+    if not history:
+        return result
+
+    # Sort descending (most recent first)
+    history_sorted = sorted(history, key=lambda r: r["date"], reverse=True)
+
+    for habit in STREAK_HABITS:
+        hid = habit["id"]
+        exp = expected.get(hid, "yes")
+        streak = 0
+        prev_date = None
+        for row in history_sorted:
+            row_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
+            if prev_date is not None:
+                if (prev_date - row_date).days != 1:
+                    break  # gap in logged days — streak ends
+            if row.get(hid) == exp:
+                streak += 1
+                prev_date = row_date
+            else:
+                break  # goal not met — streak ends
+        result[hid] = streak
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -154,7 +194,8 @@ def index():
             pass
 
     return render_template("index.html", questions=QUESTIONS, result=result,
-                           entry_date=entry_date_str, is_today=is_today, existing=existing)
+                           entry_date=entry_date_str, is_today=is_today, existing=existing,
+                           streaks=get_streaks(), streak_habits=STREAK_HABITS)
 
 
 @app.route("/dashboard")
