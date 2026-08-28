@@ -336,6 +336,54 @@
     }
     .btn-delete:hover { background: var(--red); color: #fff; }
     .btn-delete:disabled { opacity: .4; cursor: default; }
+
+    /* ── Streaks ── */
+    .streaks-section { margin-bottom: 32px; }
+    .streaks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 12px;
+    }
+    .streak-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 10px 14px;
+      text-align: center;
+      transition: border-color .2s, background .2s;
+    }
+    .streak-card.active {
+      border-color: #f59e0b;
+      background: #1a1200;
+    }
+    .streak-card.fire {
+      border-color: #f97316;
+      background: #1a0e00;
+    }
+    .streak-emoji { font-size: 1.55rem; margin-bottom: 6px; }
+    .streak-name {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .streak-count {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .streak-card.active .streak-count { color: #f59e0b; }
+    .streak-card.fire   .streak-count { color: #f97316; }
+    .streak-sublabel {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .streak-card.active .streak-sublabel { color: #f59e0b; }
+    .streak-card.fire   .streak-sublabel { color: #f97316; }
   </style>
 </head>
 <body>
@@ -348,6 +396,28 @@
 <div class="container">
 
 {% if history %}
+
+  <!-- ── Streaks ── -->
+  <div class="streaks-section">
+    <p class="section-title">🔥 Current Streaks</p>
+    <div class="streaks-grid">
+      {% for habit in streak_habits %}
+      {% set count = streaks.get(habit.id, 0) %}
+      <div class="streak-card {% if count >= 7 %}fire{% elif count > 0 %}active{% endif %}">
+        <div class="streak-emoji">{{ habit.emoji }}</div>
+        <div class="streak-name">{{ habit.label }}</div>
+        <div class="streak-count">{{ count }}</div>
+        <div class="streak-sublabel">
+          {% if count == 0 %}Start today!
+          {% elif count == 1 %}day streak
+          {% elif count >= 7 %}days 🔥
+          {% else %}day streak
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 
   <!-- ── Stats ── -->
   <div class="stats-row" id="stats-row"></div>
