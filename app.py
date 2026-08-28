@@ -203,7 +203,8 @@ def dashboard():
     history = get_history()
     recorded_dates = [row["date"] for row in history]
     return render_template("dashboard.html", history=history, questions=QUESTIONS,
-                           recorded_dates=recorded_dates)
+                           recorded_dates=recorded_dates, streaks=get_streaks(),
+                           streak_habits=STREAK_HABITS)
 
 
 @app.route("/export")
